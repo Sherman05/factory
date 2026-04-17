@@ -1,4 +1,5 @@
 import { Bot } from 'grammy';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 export interface PingLogger {
   log: (message: string) => void;
@@ -27,7 +28,11 @@ export function createBot(
   ownerChatId: number,
   logger: PingLogger = console
 ): Bot {
-  const bot = new Bot(token);
+  const proxyUrl = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
+  const baseFetchConfig = proxyUrl
+    ? ({ agent: new HttpsProxyAgent(proxyUrl) } as Record<string, unknown>)
+    : undefined;
+  const bot = new Bot(token, baseFetchConfig ? { client: { baseFetchConfig } } : undefined);
   bot.command('ping', (ctx) => handlePing(ctx, ownerChatId, logger));
   return bot;
 }

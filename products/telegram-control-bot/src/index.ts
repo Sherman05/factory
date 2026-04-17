@@ -1,8 +1,15 @@
 import 'dotenv/config';
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { loadConfig } from './config.ts';
 import { createBot } from './bot.ts';
 import { createServer } from './server.ts';
 import { makeNotifier } from './notifier.ts';
+
+const proxyUrl = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
+if (proxyUrl) {
+  setGlobalDispatcher(new ProxyAgent(proxyUrl));
+  console.log(`outbound http routed via proxy ${proxyUrl}`);
+}
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -19,9 +26,9 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-  void bot.start({
+  bot.start({
     onStart: (me) => console.log(`bot @${me.username} started`)
-  });
+  }).catch((err) => console.error('bot start failed:', err));
   const address = await server.listen({ port: config.HTTP_PORT, host: '0.0.0.0' });
   console.log(`http listening on ${address}`);
 }
