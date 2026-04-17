@@ -5,7 +5,11 @@ const ConfigSchema = z.object({
   TELEGRAM_OWNER_CHAT_ID: z.coerce
     .number({ invalid_type_error: 'TELEGRAM_OWNER_CHAT_ID must be a number' })
     .int('TELEGRAM_OWNER_CHAT_ID must be an integer'),
-  HTTP_PORT: z.coerce.number().int().positive().default(8080)
+  HTTP_PORT: z.coerce.number().int().positive().default(8080),
+  FACTORY_REPO_ROOT: z.string().min(1, 'FACTORY_REPO_ROOT is required'),
+  GITHUB_REPO_SLUG: z
+    .string()
+    .regex(/^[^\s/]+\/[^\s/]+$/, 'GITHUB_REPO_SLUG must look like "owner/repo"')
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
