@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(git push --force origin main)",
+      "Bash(git push --force origin master)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const cp=require('child_process');const diff=cp.execSync('git diff --cached',{encoding:'utf8'});const patterns=[/AKIA[0-9A-Z]{16}/,/-----BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY/,/ghp_[A-Za-z0-9]{36}/,/xox[abpr]-[A-Za-z0-9-]+/];for(const p of patterns){if(p.test(diff)){console.error('Blocked: potential secret in commit');process.exit(2)}}\""
+          }
+        ]
+      }
+    ]
+  }
+}
