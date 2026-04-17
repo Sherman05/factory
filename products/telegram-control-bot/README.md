@@ -1,20 +1,30 @@
-# Telegram Control Bot (MVP)
+# Telegram Control Bot
 
-Minimal slice of the factory's Telegram Control Bot — one `/ping` command
-and a `POST /notify` HTTP endpoint. See
-[`docs/briefs/2026-04-17-telegram-control-bot-mvp.md`](../../docs/briefs/2026-04-17-telegram-control-bot-mvp.md)
-for scope and acceptance criteria.
+The factory's Telegram Control Bot — owner-only commands and a
+`POST /notify` HTTP endpoint.
+
+- `/ping` → `pong` (liveness)
+- `/new <description>` → writes a draft brief to `docs/briefs/` and pushes a
+  commit to `main` (see
+  [brief A](../../docs/briefs/2026-04-17-brief-A-telegram-new-command.md))
+- `POST /notify` → sends a formatted message to the owner
 
 ## Quick start
 
 ```bash
 cd products/telegram-control-bot
 npm ci
-cp .env.example .env   # then fill in TELEGRAM_BOT_TOKEN and TELEGRAM_OWNER_CHAT_ID
+cp .env.example .env   # fill in all required variables
 npm run dev            # starts bot (long-polling) + HTTP server on :8080
 ```
 
-Ping the bot in Telegram: `/ping` → `pong` (only for the whitelisted chat id).
+Ping the bot: `/ping` → `pong`.
+
+Create a brief from the phone:
+
+```
+/new Сделай мне Wordle-клон на React с локальным хранением статистики
+```
 
 Trigger a notification:
 
