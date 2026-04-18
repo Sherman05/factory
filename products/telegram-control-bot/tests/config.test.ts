@@ -2,93 +2,83 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.ts';
 
 describe('loadConfig', () => {
+  const base = {
+    TELEGRAM_BOT_TOKEN: 'abc:123',
+    TELEGRAM_OWNER_CHAT_ID: '42',
+    FACTORY_REPO_ROOT: '/tmp/factory',
+    GITHUB_REPO_SLUG: 'Sherman05/factory',
+    GITHUB_TOKEN: 'ghp_test'
+  };
+
   it('parses a valid environment', () => {
-    const config = loadConfig({
-      TELEGRAM_BOT_TOKEN: 'abc:123',
-      TELEGRAM_OWNER_CHAT_ID: '42',
-      HTTP_PORT: '8080',
-      FACTORY_REPO_ROOT: '/tmp/factory',
-      GITHUB_REPO_SLUG: 'Sherman05/factory'
-    });
+    const config = loadConfig({ ...base, HTTP_PORT: '8080' });
     expect(config).toEqual({
       TELEGRAM_BOT_TOKEN: 'abc:123',
       TELEGRAM_OWNER_CHAT_ID: 42,
       HTTP_PORT: 8080,
       FACTORY_REPO_ROOT: '/tmp/factory',
-      GITHUB_REPO_SLUG: 'Sherman05/factory'
+      GITHUB_REPO_SLUG: 'Sherman05/factory',
+      GITHUB_TOKEN: 'ghp_test',
+      POLL_INTERVAL_MS: 120000
     });
   });
 
   it('defaults HTTP_PORT to 8080 when absent', () => {
-    const config = loadConfig({
-      TELEGRAM_BOT_TOKEN: 'abc:123',
-      TELEGRAM_OWNER_CHAT_ID: '42',
-      FACTORY_REPO_ROOT: '/tmp/factory',
-      GITHUB_REPO_SLUG: 'Sherman05/factory'
-    });
+    const config = loadConfig(base);
     expect(config.HTTP_PORT).toBe(8080);
   });
 
+  it('defaults POLL_INTERVAL_MS to 120000 when absent', () => {
+    const config = loadConfig(base);
+    expect(config.POLL_INTERVAL_MS).toBe(120000);
+  });
+
+  it('coerces POLL_INTERVAL_MS from string', () => {
+    const config = loadConfig({ ...base, POLL_INTERVAL_MS: '5000' });
+    expect(config.POLL_INTERVAL_MS).toBe(5000);
+  });
+
   it('throws when FACTORY_REPO_ROOT is missing', () => {
-    expect(() =>
-      loadConfig({
-        TELEGRAM_BOT_TOKEN: 'abc:123',
-        TELEGRAM_OWNER_CHAT_ID: '42',
-        GITHUB_REPO_SLUG: 'Sherman05/factory'
-      })
-    ).toThrow(/FACTORY_REPO_ROOT/);
+    const { FACTORY_REPO_ROOT: _, ...env } = base;
+    expect(() => loadConfig(env)).toThrow(/FACTORY_REPO_ROOT/);
   });
 
   it('throws when GITHUB_REPO_SLUG is missing', () => {
-    expect(() =>
-      loadConfig({
-        TELEGRAM_BOT_TOKEN: 'abc:123',
-        TELEGRAM_OWNER_CHAT_ID: '42',
-        FACTORY_REPO_ROOT: '/tmp/factory'
-      })
-    ).toThrow(/GITHUB_REPO_SLUG/);
+    const { GITHUB_REPO_SLUG: _, ...env } = base;
+    expect(() => loadConfig(env)).toThrow(/GITHUB_REPO_SLUG/);
   });
 
   it('throws when GITHUB_REPO_SLUG has the wrong shape', () => {
     expect(() =>
-      loadConfig({
-        TELEGRAM_BOT_TOKEN: 'abc:123',
-        TELEGRAM_OWNER_CHAT_ID: '42',
-        FACTORY_REPO_ROOT: '/tmp/factory',
-        GITHUB_REPO_SLUG: 'not-a-valid-slug'
-      })
+      loadConfig({ ...base, GITHUB_REPO_SLUG: 'not-a-valid-slug' })
     ).toThrow(/GITHUB_REPO_SLUG/);
   });
 
   it('throws a helpful error when TELEGRAM_BOT_TOKEN is missing', () => {
-    expect(() =>
-      loadConfig({
-        TELEGRAM_OWNER_CHAT_ID: '42',
-        FACTORY_REPO_ROOT: '/tmp/factory',
-        GITHUB_REPO_SLUG: 'Sherman05/factory'
-      })
-    ).toThrow(/TELEGRAM_BOT_TOKEN/);
+    const { TELEGRAM_BOT_TOKEN: _, ...env } = base;
+    expect(() => loadConfig(env)).toThrow(/TELEGRAM_BOT_TOKEN/);
   });
 
   it('throws when TELEGRAM_OWNER_CHAT_ID is not numeric', () => {
     expect(() =>
-      loadConfig({
-        TELEGRAM_BOT_TOKEN: 'abc:123',
-        TELEGRAM_OWNER_CHAT_ID: 'not-a-number',
-        FACTORY_REPO_ROOT: '/tmp/factory',
-        GITHUB_REPO_SLUG: 'Sherman05/factory'
-      })
+      loadConfig({ ...base, TELEGRAM_OWNER_CHAT_ID: 'not-a-number' })
     ).toThrow(/TELEGRAM_OWNER_CHAT_ID/);
   });
 
   it('throws when TELEGRAM_BOT_TOKEN is an empty string', () => {
-    expect(() =>
-      loadConfig({
-        TELEGRAM_BOT_TOKEN: '',
-        TELEGRAM_OWNER_CHAT_ID: '42',
-        FACTORY_REPO_ROOT: '/tmp/factory',
-        GITHUB_REPO_SLUG: 'Sherman05/factory'
-      })
-    ).toThrow(/TELEGRAM_BOT_TOKEN/);
+    expect(() => loadConfig({ ...base, TELEGRAM_BOT_TOKEN: '' })).toThrow(
+      /TELEGRAM_BOT_TOKEN/
+    );
+  });
+
+  it('throws when GITHUB_TOKEN is missing', () => {
+    const { GITHUB_TOKEN: _, ...env } = base;
+    expect(() => loadConfig(env)).toThrow(/GITHUB_TOKEN/);
+  });
+
+  it('throws when GITHUB_TOKEN is empty', () => {
+    expect(() => loadConfig({ ...base, GITHUB_TOKEN: '' })).toThrow(
+      /GITHUB_TOKEN/
+    );
   });
 });

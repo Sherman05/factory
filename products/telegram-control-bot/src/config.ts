@@ -9,7 +9,9 @@ const ConfigSchema = z.object({
   FACTORY_REPO_ROOT: z.string().min(1, 'FACTORY_REPO_ROOT is required'),
   GITHUB_REPO_SLUG: z
     .string()
-    .regex(/^[^\s/]+\/[^\s/]+$/, 'GITHUB_REPO_SLUG must look like "owner/repo"')
+    .regex(/^[^\s/]+\/[^\s/]+$/, 'GITHUB_REPO_SLUG must look like "owner/repo"'),
+  GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
+  POLL_INTERVAL_MS: z.coerce.number().int().positive().default(120000)
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
