@@ -9,5 +9,11 @@ coverage/
 .vscode/
 .idea/
 .vibe-kanban/
+.agent-factory/
+.worktrees/
 *.pem
 *.key
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
