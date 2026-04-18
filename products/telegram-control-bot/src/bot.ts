@@ -1,6 +1,8 @@
 import { Bot } from 'grammy';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { handleNew, type CommitBriefFn } from './newCommandHandler.ts';
+import { handleClose, handleMerge } from './callbackHandlers.ts';
+import type { GitHubClient } from './githubClient.ts';
 
 export interface PingLogger {
   log: (message: string) => void;
@@ -29,6 +31,7 @@ export interface BotDeps {
   ownerChatId: number;
   commitBrief: CommitBriefFn;
   repoSlug: string;
+  githubClient: GitHubClient;
   now?: () => Date;
   logger?: PingLogger;
 }
@@ -53,6 +56,27 @@ export function createBot(deps: BotDeps): Bot {
       now,
       repoSlug: deps.repoSlug,
       logger
+    })
+  );
+
+  const callbackLogger = {
+    log: (m: string) => logger.log(m),
+    error: (m: string, err?: unknown) => console.error(m, err)
+  };
+  bot.callbackQuery(/^merge:(\d+)$/, (ctx) =>
+    handleMerge(ctx, Number(ctx.match[1]), {
+      client: deps.githubClient,
+      ownerChatId: deps.ownerChatId,
+      logger: callbackLogger,
+      now
+    })
+  );
+  bot.callbackQuery(/^close:(\d+)$/, (ctx) =>
+    handleClose(ctx, Number(ctx.match[1]), {
+      client: deps.githubClient,
+      ownerChatId: deps.ownerChatId,
+      logger: callbackLogger,
+      now
     })
   );
 
