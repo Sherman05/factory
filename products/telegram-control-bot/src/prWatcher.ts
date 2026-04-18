@@ -1,6 +1,10 @@
+import type { InlineKeyboard } from 'grammy';
 import type { GitHubClient } from './githubClient.ts';
 import type { TextNotifier } from './notifier.ts';
+import { buildPrKeyboard } from './inlineKeyboard.ts';
 import { prMessages, type GitHubPR } from './messages.ts';
+
+type PullsLister = Pick<GitHubClient, 'listPulls'>;
 
 type PrState = 'open' | 'merged' | 'closed';
 
@@ -10,7 +14,7 @@ export interface PrWatcherLogger {
 }
 
 export interface PrWatcherDeps {
-  client: GitHubClient;
+  client: PullsLister;
   notify: TextNotifier;
   intervalMs: number;
   logger?: PrWatcherLogger;
@@ -37,9 +41,12 @@ export function createPrWatcher(deps: PrWatcherDeps): PrWatcher {
   let initialized = false;
   let timer: NodeJS.Timeout | null = null;
 
-  const safeNotify = async (text: string): Promise<void> => {
+  const safeNotify = async (
+    text: string,
+    opts?: { replyMarkup?: InlineKeyboard }
+  ): Promise<void> => {
     try {
-      await deps.notify(text);
+      await deps.notify(text, opts);
     } catch (err) {
       logger.error('pr watcher notify failed', err);
     }
@@ -64,7 +71,11 @@ export function createPrWatcher(deps: PrWatcherDeps): PrWatcher {
       const previous = known.get(pr.number);
       if (previous === undefined) {
         known.set(pr.number, current);
-        if (current === 'open') await safeNotify(prMessages.opened(pr));
+        if (current === 'open') {
+          await safeNotify(prMessages.opened(pr), {
+            replyMarkup: buildPrKeyboard(pr.number)
+          });
+        }
         continue;
       }
       if (previous === current) continue;

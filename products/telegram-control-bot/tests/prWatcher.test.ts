@@ -9,7 +9,8 @@ function pr(overrides: Partial<GitHubPR>): GitHubPR {
     state: overrides.state ?? 'open',
     merged: overrides.merged ?? false,
     html_url: overrides.html_url ?? `https://github.com/Sherman05/factory/pull/${overrides.number ?? 1}`,
-    updated_at: overrides.updated_at ?? '2026-04-18T10:00:00Z'
+    updated_at: overrides.updated_at ?? '2026-04-18T10:00:00Z',
+    head_ref: overrides.head_ref ?? `feat/thing-${overrides.number ?? 1}`
   };
 }
 
@@ -44,7 +45,44 @@ describe('createPrWatcher', () => {
     await watcher.tick();
 
     expect(notify).toHaveBeenCalledTimes(1);
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining('🆕 PR #2: feat: new'));
+    expect(notify.mock.calls[0]?.[0]).toContain('🆕 PR #2: feat: new');
+  });
+
+  it('attaches inline keyboard to opened notifications', async () => {
+    const client = {
+      listPulls: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([pr({ number: 12, title: 'feat: kb' })])
+    };
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const watcher = createPrWatcher({ client, notify, intervalMs: 1000 });
+
+    await watcher.tick();
+    await watcher.tick();
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    const [, opts] = notify.mock.calls[0]!;
+    expect(opts?.replyMarkup).toBeDefined();
+    const kb = opts.replyMarkup as { inline_keyboard: Array<Array<{ callback_data: string }>> };
+    expect(kb.inline_keyboard[0]?.[0]?.callback_data).toBe('merge:12');
+    expect(kb.inline_keyboard[0]?.[1]?.callback_data).toBe('close:12');
+  });
+
+  it('does not attach a keyboard to merged / closed notifications', async () => {
+    const client = {
+      listPulls: vi
+        .fn()
+        .mockResolvedValueOnce([pr({ number: 3, state: 'open', merged: false })])
+        .mockResolvedValueOnce([pr({ number: 3, state: 'closed', merged: true })])
+    };
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const watcher = createPrWatcher({ client, notify, intervalMs: 1000 });
+
+    await watcher.tick();
+    await watcher.tick();
+
+    expect(notify).toHaveBeenCalledWith('✅ PR #3 merged into main', undefined);
   });
 
   it('notifies merged transition (open → merged)', async () => {
@@ -60,7 +98,7 @@ describe('createPrWatcher', () => {
     await watcher.tick();
     await watcher.tick();
 
-    expect(notify).toHaveBeenCalledWith('✅ PR #3 merged into main');
+    expect(notify).toHaveBeenCalledWith('✅ PR #3 merged into main', undefined);
   });
 
   it('notifies closed-without-merge transition (open → closed)', async () => {
@@ -76,7 +114,7 @@ describe('createPrWatcher', () => {
     await watcher.tick();
     await watcher.tick();
 
-    expect(notify).toHaveBeenCalledWith('❌ PR #7 closed without merge');
+    expect(notify).toHaveBeenCalledWith('❌ PR #7 closed without merge', undefined);
   });
 
   it('does not re-notify when state stays the same', async () => {

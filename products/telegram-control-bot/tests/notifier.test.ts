@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { InlineKeyboard } from 'grammy';
 import { makeNotifier, makeTextNotifier } from '../src/notifier.ts';
 
 function fakeApi() {
@@ -66,5 +67,16 @@ describe('makeTextNotifier', () => {
     const notify = makeTextNotifier(api, 7);
 
     await expect(notify('hi')).rejects.toThrow('telegram down');
+  });
+
+  it('forwards reply_markup when opts.replyMarkup is provided', async () => {
+    const api = { sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }) };
+    const notify = makeTextNotifier(api, 7);
+    const keyboard = new InlineKeyboard().text('x', 'y');
+
+    await notify('hi', { replyMarkup: keyboard });
+
+    const [, , opts] = api.sendMessage.mock.calls[0]!;
+    expect(opts).toMatchObject({ reply_markup: keyboard });
   });
 });

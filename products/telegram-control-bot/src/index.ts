@@ -22,20 +22,22 @@ async function main(): Promise<void> {
   const commitBrief = (file: Parameters<typeof writeBriefAndCommit>[1], message: string) =>
     writeBriefAndCommit({ git, repoRoot: config.FACTORY_REPO_ROOT }, file, message);
 
+  const githubClient = makeGitHubClient({
+    token: config.GITHUB_TOKEN,
+    repoSlug: config.GITHUB_REPO_SLUG
+  });
+
   const bot = createBot({
     token: config.TELEGRAM_BOT_TOKEN,
     ownerChatId: config.TELEGRAM_OWNER_CHAT_ID,
     commitBrief,
-    repoSlug: config.GITHUB_REPO_SLUG
+    repoSlug: config.GITHUB_REPO_SLUG,
+    githubClient
   });
   const notify = makeNotifier(bot.api, config.TELEGRAM_OWNER_CHAT_ID);
   const notifyText = makeTextNotifier(bot.api, config.TELEGRAM_OWNER_CHAT_ID);
   const server = createServer({ sendNotification: notify, logger: true });
 
-  const githubClient = makeGitHubClient({
-    token: config.GITHUB_TOKEN,
-    repoSlug: config.GITHUB_REPO_SLUG
-  });
   const prWatcher = createPrWatcher({
     client: githubClient,
     notify: notifyText,
