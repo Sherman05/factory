@@ -3,11 +3,19 @@ import type { GitHubPR } from './messages.ts';
 
 export interface GitHubClient {
   listPulls(): Promise<GitHubPR[]>;
+  getPr(number: number): Promise<GitHubPR>;
+  mergePr(number: number): Promise<void>;
+  closePr(number: number): Promise<void>;
+  deleteBranch(ref: string): Promise<void>;
 }
 
 type FetchLike = (
   input: string,
-  init?: { headers?: Record<string, string> }
+  init?: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  }
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -29,6 +37,7 @@ interface RawPull {
   merged_at: string | null;
   html_url: string;
   updated_at: string;
+  head: { ref: string };
 }
 
 export class GitHubApiError extends Error {
@@ -42,34 +51,74 @@ export class GitHubApiError extends Error {
   }
 }
 
+function mapPull(p: RawPull): GitHubPR {
+  return {
+    number: p.number,
+    title: p.title,
+    state: p.state,
+    merged: p.merged_at !== null,
+    html_url: p.html_url,
+    updated_at: p.updated_at,
+    head_ref: p.head.ref
+  };
+}
+
 export function makeGitHubClient(deps: GitHubClientDeps): GitHubClient {
   const f: FetchLike = deps.fetchImpl ?? (undiciFetch as unknown as FetchLike);
-  const url = `https://api.github.com/repos/${deps.repoSlug}/pulls?state=all&per_page=20&sort=updated&direction=desc`;
+  const base = `https://api.github.com/repos/${deps.repoSlug}`;
+  const headers = {
+    Authorization: `Bearer ${deps.token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'telegram-control-bot'
+  };
+
+  const request = async (
+    path: string,
+    init: { method?: string; body?: unknown } = {}
+  ) => {
+    const res = await f(`${base}${path}`, {
+      method: init.method ?? 'GET',
+      headers: {
+        ...headers,
+        ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {})
+      },
+      body: init.body !== undefined ? JSON.stringify(init.body) : undefined
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      const retryHeader = res.headers.get('retry-after');
+      const retryAfter = retryHeader ? Number(retryHeader) : undefined;
+      throw new GitHubApiError(res.status, body, retryAfter);
+    }
+    return res;
+  };
+
   return {
     async listPulls() {
-      const res = await f(url, {
-        headers: {
-          Authorization: `Bearer ${deps.token}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'telegram-control-bot'
-        }
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        const retryHeader = res.headers.get('retry-after');
-        const retryAfter = retryHeader ? Number(retryHeader) : undefined;
-        throw new GitHubApiError(res.status, body, retryAfter);
-      }
+      const res = await request('/pulls?state=all&per_page=20&sort=updated&direction=desc');
       const raw = (await res.json()) as RawPull[];
-      return raw.map((p) => ({
-        number: p.number,
-        title: p.title,
-        state: p.state,
-        merged: p.merged_at !== null,
-        html_url: p.html_url,
-        updated_at: p.updated_at
-      }));
+      return raw.map(mapPull);
+    },
+    async getPr(number) {
+      const res = await request(`/pulls/${number}`);
+      const raw = (await res.json()) as RawPull;
+      return mapPull(raw);
+    },
+    async mergePr(number) {
+      await request(`/pulls/${number}/merge`, {
+        method: 'PUT',
+        body: { merge_method: 'squash' }
+      });
+    },
+    async closePr(number) {
+      await request(`/pulls/${number}`, {
+        method: 'PATCH',
+        body: { state: 'closed' }
+      });
+    },
+    async deleteBranch(ref) {
+      await request(`/git/refs/heads/${ref}`, { method: 'DELETE' });
     }
   };
 }
