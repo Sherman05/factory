@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { makeNotifier } from '../src/notifier.ts';
+import { makeNotifier, makeTextNotifier } from '../src/notifier.ts';
 
 function fakeApi() {
   const sendMessage = vi.fn().mockResolvedValue({ message_id: 1 });
@@ -41,5 +41,30 @@ describe('makeNotifier', () => {
     const notify = makeNotifier(api, 42);
 
     await expect(notify('t', 'https://example.com')).rejects.toThrow('telegram down');
+  });
+});
+
+describe('makeTextNotifier', () => {
+  it('sends a plain-text message to the owner chat id', async () => {
+    const api = { sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }) };
+    const notify = makeTextNotifier(api, 7);
+
+    await notify('✅ PR #5 merged into main');
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    const [chatId, text, opts] = api.sendMessage.mock.calls[0]!;
+    expect(chatId).toBe(7);
+    expect(text).toBe('✅ PR #5 merged into main');
+    expect(opts).toMatchObject({ disable_web_page_preview: false });
+    expect(opts).not.toHaveProperty('parse_mode');
+  });
+
+  it('propagates errors from the Telegram API', async () => {
+    const api = {
+      sendMessage: vi.fn().mockRejectedValue(new Error('telegram down'))
+    };
+    const notify = makeTextNotifier(api, 7);
+
+    await expect(notify('hi')).rejects.toThrow('telegram down');
   });
 });

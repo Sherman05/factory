@@ -7,6 +7,7 @@ export interface TelegramSendMessageApi {
 }
 
 export type Notifier = (title: string, url: string) => Promise<void>;
+export type TextNotifier = (text: string) => Promise<void>;
 
 export function makeNotifier(api: TelegramSendMessageApi, ownerChatId: number): Notifier {
   return async (title, url) => {
@@ -14,6 +15,15 @@ export function makeNotifier(api: TelegramSendMessageApi, ownerChatId: number): 
     const safeUrl = escapeHtml(url);
     const text = `<b>${safeTitle}</b>\n<a href="${safeUrl}">${safeUrl}</a>`;
     await api.sendMessage(ownerChatId, text, { parse_mode: 'HTML' });
+  };
+}
+
+export function makeTextNotifier(
+  api: TelegramSendMessageApi,
+  ownerChatId: number
+): TextNotifier {
+  return async (text) => {
+    await api.sendMessage(ownerChatId, text, { disable_web_page_preview: false });
   };
 }
 
