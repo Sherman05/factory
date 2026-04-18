@@ -5,6 +5,7 @@ export interface GitHubPR {
   merged: boolean;
   html_url: string;
   updated_at: string;
+  head_ref: string;
 }
 
 export const prMessages = {
