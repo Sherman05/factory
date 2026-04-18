@@ -7,7 +7,8 @@ const pr: GitHubPR = {
   state: 'open',
   merged: false,
   html_url: 'https://github.com/Sherman05/factory/pull/42',
-  updated_at: '2026-04-18T10:00:00Z'
+  updated_at: '2026-04-18T10:00:00Z',
+  head_ref: 'feat/wordle'
 };
 
 describe('prMessages', () => {
