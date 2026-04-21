@@ -70,7 +70,8 @@ async function main(): Promise<void> {
     notify: (text) => notifyText(text),
     logger: { log: (m) => console.log(m), error: (m, err) => console.error(m, err) },
     tickIntervalMs: config.WORKER_TICK_MS,
-    worktreesRoot: config.WORKTREES_ROOT
+    worktreesRoot: config.WORKTREES_ROOT,
+    maxParallel: config.MAX_PARALLEL_TASKS
   });
 
   const shutdown = async (signal: string) => {
@@ -91,7 +92,9 @@ async function main(): Promise<void> {
   console.log(`http listening on ${address}`);
   prWatcher.start().catch((err) => console.error('pr watcher start failed:', err));
   taskWorker.start();
-  console.log(`task worker started (tick ${config.WORKER_TICK_MS}ms, db ${config.TASK_DB_PATH})`);
+  console.log(
+    `task worker started (tick ${config.WORKER_TICK_MS}ms, max parallel ${config.MAX_PARALLEL_TASKS}, db ${config.TASK_DB_PATH})`
+  );
 }
 
 main().catch((err) => {

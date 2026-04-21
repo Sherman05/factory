@@ -14,6 +14,12 @@ const RawSchema = z.object({
   GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(120000),
   WORKER_TICK_MS: z.coerce.number().int().positive().default(2000),
+  MAX_PARALLEL_TASKS: z.coerce
+    .number()
+    .int()
+    .min(1, 'MAX_PARALLEL_TASKS must be at least 1')
+    .max(10, 'MAX_PARALLEL_TASKS must be at most 10')
+    .default(3),
   CLAUDE_CLI_PATH: z.string().min(1).default('claude'),
   TASK_DB_PATH: z.string().min(1).optional(),
   WORKTREES_ROOT: z.string().min(1).optional()
@@ -28,6 +34,7 @@ export interface Config {
   GITHUB_TOKEN: string;
   POLL_INTERVAL_MS: number;
   WORKER_TICK_MS: number;
+  MAX_PARALLEL_TASKS: number;
   CLAUDE_CLI_PATH: string;
   TASK_DB_PATH: string;
   WORKTREES_ROOT: string;
