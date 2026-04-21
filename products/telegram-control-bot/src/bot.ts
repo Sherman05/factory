@@ -2,6 +2,7 @@ import { Bot } from 'grammy';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { handleNew, type CommitBriefFn, type EnqueueTaskFn } from './newCommandHandler.ts';
 import { handleStatus } from './statusCommand.ts';
+import { handleCancel, type CancelRunningFn } from './cancelCommand.ts';
 import { handleClose, handleMerge } from './callbackHandlers.ts';
 import type { GitHubClient } from './githubClient.ts';
 import type { TaskQueue } from './taskQueue.ts';
@@ -34,6 +35,7 @@ export interface BotDeps {
   commitBrief: CommitBriefFn;
   enqueueTask: EnqueueTaskFn;
   taskQueue: TaskQueue;
+  cancelRunning: CancelRunningFn;
   repoSlug: string;
   githubClient: GitHubClient;
   now?: () => Date;
@@ -67,6 +69,14 @@ export function createBot(deps: BotDeps): Bot {
     handleStatus(ctx, {
       ownerChatId: deps.ownerChatId,
       queue: deps.taskQueue,
+      logger
+    })
+  );
+  bot.command('cancel', (ctx) =>
+    handleCancel(ctx, {
+      ownerChatId: deps.ownerChatId,
+      queue: deps.taskQueue,
+      cancelRunning: deps.cancelRunning,
       logger
     })
   );

@@ -21,6 +21,7 @@ export interface TaskWorkerDeps {
 export interface TaskWorker {
   start(): void;
   stop(timeoutMs?: number): Promise<void>;
+  cancel(taskId: number): boolean;
 }
 
 export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
@@ -28,6 +29,7 @@ export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
   const active = new Set<Promise<void>>();
+  const controllers = new Map<number, AbortController>();
 
   const safeNotify = async (text: string) => {
     try {
@@ -47,14 +49,17 @@ export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
         return;
       }
       if (!task) return;
-      const promise = runOne(task).finally(() => {
+      const controller = new AbortController();
+      controllers.set(task.id, controller);
+      const promise = runOne(task, controller).finally(() => {
         active.delete(promise);
+        controllers.delete(task.id);
       });
       active.add(promise);
     }
   };
 
-  const runOne = async (task: Task): Promise<void> => {
+  const runOne = async (task: Task, controller: AbortController): Promise<void> => {
     let prUrl: string | undefined;
     let failReason: string | undefined;
 
@@ -63,12 +68,18 @@ export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
     try {
       for await (const ev of deps.runner.runTask({
         id: task.id,
-        description: task.desc
+        description: task.desc,
+        abortSignal: controller.signal
       })) {
         handleEvent(ev);
       }
     } catch (err) {
       failReason = err instanceof Error ? err.message : String(err);
+    }
+
+    if (controller.signal.aborted) {
+      failReason = 'canceled by owner';
+      prUrl = undefined;
     }
 
     function handleEvent(ev: RunnerEvent): void {
@@ -131,6 +142,12 @@ export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
         waitAll,
         new Promise<void>((r) => setTimeout(r, timeoutMs))
       ]);
+    },
+    cancel(taskId) {
+      const controller = controllers.get(taskId);
+      if (!controller) return false;
+      controller.abort();
+      return true;
     }
   };
 }

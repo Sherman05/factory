@@ -30,6 +30,7 @@ function makeFakeQueue(initialTasks: Task[]) {
       if (patch.prUrl !== undefined) t.prUrl = patch.prUrl;
       if (patch.error !== undefined) t.error = patch.error;
     }),
+    getById: vi.fn((id: number) => tasks.find((t) => t.id === id) ?? null),
     getActive: vi.fn(() =>
       tasks.filter((t) => t.state === 'queued' || t.state === 'running')
     ),
@@ -314,6 +315,67 @@ describe('createTaskWorker', () => {
     expect((queue.claim as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
       callsAfterStop
     );
+  });
+
+  describe('cancel(id)', () => {
+    it('aborts a running task and marks it failed with "canceled by owner"', async () => {
+      const { queue, tasks } = makeFakeQueue([T(5)]);
+      let gotAbort: AbortSignal | undefined;
+      const runner: Runner = {
+        runTask(task) {
+          gotAbort = task.abortSignal;
+          return (async function* () {
+            yield { type: 'state', state: 'starting' } as RunnerEvent;
+            await new Promise((resolve) => {
+              task.abortSignal?.addEventListener('abort', () => resolve(null), {
+                once: true
+              });
+            });
+            yield { type: 'stderr', line: 'killed' } as RunnerEvent;
+            yield { type: 'state', state: 'failed' } as RunnerEvent;
+          })();
+        }
+      };
+
+      const worker = createTaskWorker(baseDeps({ queue, runner, tickIntervalMs: 3 }));
+      worker.start();
+      await flush(30);
+
+      const wasRunning = worker.cancel(5);
+      expect(wasRunning).toBe(true);
+      expect(gotAbort?.aborted).toBe(true);
+
+      await flush(50);
+      await worker.stop();
+
+      expect(tasks[0]!.state).toBe('failed');
+      expect(tasks[0]!.error).toBe('canceled by owner');
+    });
+
+    it('returns false when cancel is called with an unknown id', async () => {
+      const worker = createTaskWorker(baseDeps({ tickIntervalMs: 5 }));
+      worker.start();
+      expect(worker.cancel(999)).toBe(false);
+      await worker.stop();
+    });
+
+    it('cleans the controller entry after task finishes — cancel after finalize returns false', async () => {
+      const { queue, tasks } = makeFakeQueue([T(8)]);
+      const runner = makeRunner({
+        8: [
+          { type: 'state', state: 'starting' },
+          { type: 'pr_opened', url: 'https://gh.com/pr/8' },
+          { type: 'state', state: 'completed' }
+        ]
+      });
+      const worker = createTaskWorker(baseDeps({ queue, runner, tickIntervalMs: 3 }));
+      worker.start();
+      await flush(60);
+      await worker.stop();
+
+      expect(tasks[0]!.state).toBe('done');
+      expect(worker.cancel(8)).toBe(false);
+    });
   });
 
   describe('parallelism (maxParallel > 1)', () => {

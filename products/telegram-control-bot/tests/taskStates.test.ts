@@ -18,6 +18,10 @@ describe('validTransition', () => {
     expect(validTransition('queued', 'done')).toBe(false);
   });
 
+  it('allows queued → failed (for cancellation)', () => {
+    expect(validTransition('queued', 'failed')).toBe(true);
+  });
+
   it('rejects done → running (terminal state)', () => {
     expect(validTransition('done', 'running')).toBe(false);
   });

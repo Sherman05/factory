@@ -23,6 +23,7 @@ export interface TaskQueue {
   enqueue(desc: string, createdBy: number): Task;
   claim(): Task | null;
   update(id: number, patch: UpdatePatch): void;
+  getById(id: number): Task | null;
   getActive(): Task[];
   getRecent(limit?: number): Task[];
   close(): void;
@@ -122,6 +123,11 @@ export function createTaskQueue(dbPath: string): TaskQueue {
       }
       const nextState = patch.state ?? row.state;
       updateStateStmt.run(nextState, patch.prUrl ?? null, patch.error ?? null, id);
+    },
+
+    getById(id) {
+      const row = getByIdStmt.get(id) as Row | undefined;
+      return row ? rowToTask(row) : null;
     },
 
     getActive() {

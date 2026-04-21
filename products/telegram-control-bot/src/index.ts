@@ -45,12 +45,16 @@ async function main(): Promise<void> {
     claudeCliPath: config.CLAUDE_CLI_PATH
   });
 
+  const taskWorkerRef: { current: { cancel: (id: number) => boolean } | null } = {
+    current: null
+  };
   const bot = createBot({
     token: config.TELEGRAM_BOT_TOKEN,
     ownerChatId: config.TELEGRAM_OWNER_CHAT_ID,
     commitBrief,
     enqueueTask: (desc, by) => taskQueue.enqueue(desc, by),
     taskQueue,
+    cancelRunning: (id) => taskWorkerRef.current?.cancel(id) ?? false,
     repoSlug: config.GITHUB_REPO_SLUG,
     githubClient
   });
@@ -73,6 +77,7 @@ async function main(): Promise<void> {
     worktreesRoot: config.WORKTREES_ROOT,
     maxParallel: config.MAX_PARALLEL_TASKS
   });
+  taskWorkerRef.current = taskWorker;
 
   const shutdown = async (signal: string) => {
     console.log(`received ${signal}, shutting down`);

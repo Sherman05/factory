@@ -160,4 +160,39 @@ describe('createRunner', () => {
     expect(events.at(-1)).toEqual({ type: 'state', state: 'failed' });
     expect(events.some((e) => e.type === 'stderr' && /worktree already exists/.test(e.line))).toBe(true);
   });
+
+  it('kills the child process with SIGTERM when abortSignal fires mid-run', async () => {
+    const { deps, child, spawn } = makeDeps();
+    const runner = createRunner(deps);
+    const controller = new AbortController();
+
+    const drained = drain(
+      runner.runTask({ id: 1, description: 'x', abortSignal: controller.signal })
+    );
+
+    await flush();
+    expect(spawn).toHaveBeenCalledTimes(1);
+
+    controller.abort();
+    await flush();
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+
+    child.emit('exit', null);
+    const events = await drained;
+    expect(events.at(-1)).toEqual({ type: 'state', state: 'failed' });
+  });
+
+  it('does not spawn the child when abortSignal is already aborted', async () => {
+    const { deps, spawn } = makeDeps();
+    const runner = createRunner(deps);
+    const controller = new AbortController();
+    controller.abort();
+
+    const events = await drain(
+      runner.runTask({ id: 1, description: 'x', abortSignal: controller.signal })
+    );
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(events.at(-1)).toEqual({ type: 'state', state: 'failed' });
+  });
 });
