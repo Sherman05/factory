@@ -65,6 +65,7 @@ function baseDeps(
     logger: { log: vi.fn(), error: vi.fn() },
     tickIntervalMs: 10,
     worktreesRoot: '/w',
+    maxParallel: 1,
     ...overrides
   };
 }
@@ -313,5 +314,124 @@ describe('createTaskWorker', () => {
     expect((queue.claim as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
       callsAfterStop
     );
+  });
+
+  describe('parallelism (maxParallel > 1)', () => {
+    it('runs up to maxParallel tasks concurrently', async () => {
+      const { queue, tasks } = makeFakeQueue([T(1), T(2), T(3), T(4)]);
+      let inflight = 0;
+      let maxObserved = 0;
+      const runner: Runner = {
+        runTask(task) {
+          return (async function* () {
+            inflight++;
+            maxObserved = Math.max(maxObserved, inflight);
+            yield { type: 'state', state: 'starting' } as RunnerEvent;
+            await new Promise((r) => setTimeout(r, 40));
+            yield {
+              type: 'pr_opened',
+              url: `https://gh.com/pr/${task.id}`
+            } as RunnerEvent;
+            yield { type: 'state', state: 'completed' } as RunnerEvent;
+            inflight--;
+          })();
+        }
+      };
+
+      const worker = createTaskWorker(
+        baseDeps({ queue, runner, tickIntervalMs: 5, maxParallel: 3 })
+      );
+      worker.start();
+      await flush(200);
+      await worker.stop();
+
+      expect(maxObserved).toBeGreaterThanOrEqual(3);
+      expect(tasks.every((t) => t.state === 'done')).toBe(true);
+    });
+
+    it('never exceeds maxParallel concurrent runs', async () => {
+      const { queue, tasks } = makeFakeQueue([T(1), T(2), T(3), T(4), T(5)]);
+      let inflight = 0;
+      let maxObserved = 0;
+      const runner: Runner = {
+        runTask(task) {
+          return (async function* () {
+            inflight++;
+            maxObserved = Math.max(maxObserved, inflight);
+            yield { type: 'state', state: 'starting' } as RunnerEvent;
+            await new Promise((r) => setTimeout(r, 20));
+            yield {
+              type: 'pr_opened',
+              url: `https://gh.com/pr/${task.id}`
+            } as RunnerEvent;
+            yield { type: 'state', state: 'completed' } as RunnerEvent;
+            inflight--;
+          })();
+        }
+      };
+
+      const worker = createTaskWorker(
+        baseDeps({ queue, runner, tickIntervalMs: 3, maxParallel: 2 })
+      );
+      worker.start();
+      await flush(200);
+      await worker.stop();
+
+      expect(maxObserved).toBe(2);
+      expect(tasks.every((t) => t.state === 'done')).toBe(true);
+    });
+
+    it('starts a new task within one tick after a slot frees up', async () => {
+      const { queue, tasks } = makeFakeQueue([T(1), T(2), T(3)]);
+      const durations: Record<number, number> = { 1: 20, 2: 50, 3: 50 };
+      const runner: Runner = {
+        runTask(task) {
+          return (async function* () {
+            yield { type: 'state', state: 'starting' } as RunnerEvent;
+            await new Promise((r) => setTimeout(r, durations[task.id]));
+            yield {
+              type: 'pr_opened',
+              url: `https://gh.com/pr/${task.id}`
+            } as RunnerEvent;
+            yield { type: 'state', state: 'completed' } as RunnerEvent;
+          })();
+        }
+      };
+
+      const worker = createTaskWorker(
+        baseDeps({ queue, runner, tickIntervalMs: 3, maxParallel: 2 })
+      );
+      worker.start();
+      await flush(150);
+      await worker.stop();
+
+      expect(tasks.every((t) => t.state === 'done')).toBe(true);
+    });
+
+    it('stop() waits for all parallel tasks to finish', async () => {
+      const { queue, tasks } = makeFakeQueue([T(1), T(2), T(3)]);
+      const runner: Runner = {
+        runTask(task) {
+          return (async function* () {
+            yield { type: 'state', state: 'starting' } as RunnerEvent;
+            await new Promise((r) => setTimeout(r, 30));
+            yield {
+              type: 'pr_opened',
+              url: `https://gh.com/pr/${task.id}`
+            } as RunnerEvent;
+            yield { type: 'state', state: 'completed' } as RunnerEvent;
+          })();
+        }
+      };
+
+      const worker = createTaskWorker(
+        baseDeps({ queue, runner, tickIntervalMs: 3, maxParallel: 3 })
+      );
+      worker.start();
+      await flush(10);
+      await worker.stop(5000);
+
+      expect(tasks.every((t) => t.state === 'done')).toBe(true);
+    });
   });
 });

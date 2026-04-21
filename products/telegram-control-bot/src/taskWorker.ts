@@ -15,6 +15,7 @@ export interface TaskWorkerDeps {
   logger: TaskWorkerLogger;
   tickIntervalMs: number;
   worktreesRoot: string;
+  maxParallel?: number;
 }
 
 export interface TaskWorker {
@@ -23,9 +24,10 @@ export interface TaskWorker {
 }
 
 export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
+  const maxParallel = Math.max(1, deps.maxParallel ?? 1);
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
-  let active: Promise<void> | null = null;
+  const active = new Set<Promise<void>>();
 
   const safeNotify = async (text: string) => {
     try {
@@ -35,19 +37,21 @@ export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
     }
   };
 
-  const tick = async () => {
-    if (stopped || active) return;
-    let task: Task | null;
-    try {
-      task = deps.queue.claim();
-    } catch (err) {
-      deps.logger.error('queue.claim failed', err);
-      return;
+  const tick = () => {
+    while (!stopped && active.size < maxParallel) {
+      let task: Task | null;
+      try {
+        task = deps.queue.claim();
+      } catch (err) {
+        deps.logger.error('queue.claim failed', err);
+        return;
+      }
+      if (!task) return;
+      const promise = runOne(task).finally(() => {
+        active.delete(promise);
+      });
+      active.add(promise);
     }
-    if (!task) return;
-    active = runOne(task).finally(() => {
-      active = null;
-    });
   };
 
   const runOne = async (task: Task): Promise<void> => {
@@ -111,10 +115,8 @@ export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
     start() {
       if (timer) return;
       stopped = false;
-      timer = setInterval(() => {
-        void tick();
-      }, deps.tickIntervalMs);
-      void tick();
+      timer = setInterval(tick, deps.tickIntervalMs);
+      tick();
     },
     async stop(timeoutMs = 30000) {
       stopped = true;
@@ -122,11 +124,11 @@ export function createTaskWorker(deps: TaskWorkerDeps): TaskWorker {
         clearInterval(timer);
         timer = null;
       }
-      if (!active) return;
-      const waiter = active;
+      if (active.size === 0) return;
+      const waitAll = Promise.allSettled(active).then(() => undefined);
       if (timeoutMs <= 0) return;
       await Promise.race([
-        waiter,
+        waitAll,
         new Promise<void>((r) => setTimeout(r, timeoutMs))
       ]);
     }

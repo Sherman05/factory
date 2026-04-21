@@ -31,6 +31,28 @@ describe('loadConfig', () => {
     expect(config.WORKER_TICK_MS).toBe(2000);
   });
 
+  it('defaults MAX_PARALLEL_TASKS to 3', () => {
+    const config = loadConfig(base);
+    expect(config.MAX_PARALLEL_TASKS).toBe(3);
+  });
+
+  it('coerces MAX_PARALLEL_TASKS from string', () => {
+    const config = loadConfig({ ...base, MAX_PARALLEL_TASKS: '5' });
+    expect(config.MAX_PARALLEL_TASKS).toBe(5);
+  });
+
+  it('rejects MAX_PARALLEL_TASKS below 1', () => {
+    expect(() => loadConfig({ ...base, MAX_PARALLEL_TASKS: '0' })).toThrow(
+      /MAX_PARALLEL_TASKS/
+    );
+  });
+
+  it('rejects MAX_PARALLEL_TASKS above 10', () => {
+    expect(() => loadConfig({ ...base, MAX_PARALLEL_TASKS: '11' })).toThrow(
+      /MAX_PARALLEL_TASKS/
+    );
+  });
+
   it('defaults TASK_DB_PATH to <repo>/.agent-factory/tasks.db', () => {
     const config = loadConfig(base);
     expect(config.TASK_DB_PATH.replace(/\\/g, '/')).toBe(
