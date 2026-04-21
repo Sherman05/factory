@@ -1,8 +1,10 @@
 import { Bot } from 'grammy';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { handleNew, type CommitBriefFn } from './newCommandHandler.ts';
+import { handleNew, type CommitBriefFn, type EnqueueTaskFn } from './newCommandHandler.ts';
+import { handleStatus } from './statusCommand.ts';
 import { handleClose, handleMerge } from './callbackHandlers.ts';
 import type { GitHubClient } from './githubClient.ts';
+import type { TaskQueue } from './taskQueue.ts';
 
 export interface PingLogger {
   log: (message: string) => void;
@@ -30,6 +32,8 @@ export interface BotDeps {
   token: string;
   ownerChatId: number;
   commitBrief: CommitBriefFn;
+  enqueueTask: EnqueueTaskFn;
+  taskQueue: TaskQueue;
   repoSlug: string;
   githubClient: GitHubClient;
   now?: () => Date;
@@ -53,8 +57,16 @@ export function createBot(deps: BotDeps): Bot {
     handleNew(ctx, {
       ownerChatId: deps.ownerChatId,
       commitBrief: deps.commitBrief,
+      enqueueTask: deps.enqueueTask,
       now,
       repoSlug: deps.repoSlug,
+      logger
+    })
+  );
+  bot.command('status', (ctx) =>
+    handleStatus(ctx, {
+      ownerChatId: deps.ownerChatId,
+      queue: deps.taskQueue,
       logger
     })
   );

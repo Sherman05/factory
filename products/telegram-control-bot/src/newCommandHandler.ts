@@ -1,5 +1,6 @@
 import { toSlug } from './slug.ts';
 import type { BriefFile, GitWriterResult } from './gitWriter.ts';
+import type { Task } from './taskQueue.ts';
 
 export interface NewCommandLogger {
   log: (message: string) => void;
@@ -16,9 +17,12 @@ export type CommitBriefFn = (
   commitMessage: string
 ) => Promise<GitWriterResult>;
 
+export type EnqueueTaskFn = (desc: string, createdBy: number) => Task;
+
 export interface NewCommandDeps {
   ownerChatId: number;
   commitBrief: CommitBriefFn;
+  enqueueTask: EnqueueTaskFn;
   now: () => Date;
   repoSlug: string;
   logger: NewCommandLogger;
@@ -40,6 +44,14 @@ export async function handleNew(
     return;
   }
 
+  let task: Task;
+  try {
+    task = deps.enqueueTask(description, chatId);
+  } catch (err) {
+    await ctx.reply(`⚠️ queue error: ${errMessage(err)}`);
+    return;
+  }
+
   const slug = toSlug(description);
   const now = deps.now();
   const stamp = formatStamp(now);
@@ -51,13 +63,20 @@ export async function handleNew(
     const result = await deps.commitBrief({ relativePath, content }, commitMessage);
     const url = `https://github.com/${deps.repoSlug}/blob/main/${relativePath}`;
     await ctx.reply(
-      `✅ brief saved: ${relativePath}\ncommit ${result.shortSha}: ${url}`,
+      `🆕 Task #${task.id} queued: ${description}\n` +
+        `Brief: ${relativePath}\n` +
+        `commit ${result.shortSha}: ${url}`,
       { link_preview_options: { is_disabled: true } }
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await ctx.reply(`⚠️ git error: ${msg}`);
+    await ctx.reply(
+      `🆕 Task #${task.id} queued: ${description}\n⚠️ brief error: ${errMessage(err)}`
+    );
   }
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function extractDescription(raw: string): string {
