@@ -12,15 +12,45 @@ describe('loadConfig', () => {
 
   it('parses a valid environment', () => {
     const config = loadConfig({ ...base, HTTP_PORT: '8080' });
-    expect(config).toEqual({
-      TELEGRAM_BOT_TOKEN: 'abc:123',
-      TELEGRAM_OWNER_CHAT_ID: 42,
-      HTTP_PORT: 8080,
-      FACTORY_REPO_ROOT: '/tmp/factory',
-      GITHUB_REPO_SLUG: 'Sherman05/factory',
-      GITHUB_TOKEN: 'ghp_test',
-      POLL_INTERVAL_MS: 120000
-    });
+    expect(config.TELEGRAM_BOT_TOKEN).toBe('abc:123');
+    expect(config.TELEGRAM_OWNER_CHAT_ID).toBe(42);
+    expect(config.HTTP_PORT).toBe(8080);
+    expect(config.FACTORY_REPO_ROOT).toBe('/tmp/factory');
+    expect(config.GITHUB_REPO_SLUG).toBe('Sherman05/factory');
+    expect(config.GITHUB_TOKEN).toBe('ghp_test');
+    expect(config.POLL_INTERVAL_MS).toBe(120000);
+  });
+
+  it('defaults CLAUDE_CLI_PATH to "claude"', () => {
+    const config = loadConfig(base);
+    expect(config.CLAUDE_CLI_PATH).toBe('claude');
+  });
+
+  it('defaults WORKER_TICK_MS to 2000', () => {
+    const config = loadConfig(base);
+    expect(config.WORKER_TICK_MS).toBe(2000);
+  });
+
+  it('defaults TASK_DB_PATH to <repo>/.agent-factory/tasks.db', () => {
+    const config = loadConfig(base);
+    expect(config.TASK_DB_PATH.replace(/\\/g, '/')).toBe(
+      '/tmp/factory/.agent-factory/tasks.db'
+    );
+  });
+
+  it('defaults WORKTREES_ROOT to <repo>/.worktrees', () => {
+    const config = loadConfig(base);
+    expect(config.WORKTREES_ROOT.replace(/\\/g, '/')).toBe('/tmp/factory/.worktrees');
+  });
+
+  it('respects an explicit TASK_DB_PATH override', () => {
+    const config = loadConfig({ ...base, TASK_DB_PATH: '/var/lib/tasks.db' });
+    expect(config.TASK_DB_PATH).toBe('/var/lib/tasks.db');
+  });
+
+  it('respects an explicit WORKTREES_ROOT override', () => {
+    const config = loadConfig({ ...base, WORKTREES_ROOT: '/var/wt' });
+    expect(config.WORKTREES_ROOT).toBe('/var/wt');
   });
 
   it('defaults HTTP_PORT to 8080 when absent', () => {
