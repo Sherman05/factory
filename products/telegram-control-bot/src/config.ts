@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { join } from 'node:path';
 
-const ConfigSchema = z.object({
+const RawSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
   TELEGRAM_OWNER_CHAT_ID: z.coerce
     .number({ invalid_type_error: 'TELEGRAM_OWNER_CHAT_ID must be a number' })
@@ -11,18 +12,40 @@ const ConfigSchema = z.object({
     .string()
     .regex(/^[^\s/]+\/[^\s/]+$/, 'GITHUB_REPO_SLUG must look like "owner/repo"'),
   GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
-  POLL_INTERVAL_MS: z.coerce.number().int().positive().default(120000)
+  POLL_INTERVAL_MS: z.coerce.number().int().positive().default(120000),
+  WORKER_TICK_MS: z.coerce.number().int().positive().default(2000),
+  CLAUDE_CLI_PATH: z.string().min(1).default('claude'),
+  TASK_DB_PATH: z.string().min(1).optional(),
+  WORKTREES_ROOT: z.string().min(1).optional()
 });
 
-export type Config = z.infer<typeof ConfigSchema>;
+export interface Config {
+  TELEGRAM_BOT_TOKEN: string;
+  TELEGRAM_OWNER_CHAT_ID: number;
+  HTTP_PORT: number;
+  FACTORY_REPO_ROOT: string;
+  GITHUB_REPO_SLUG: string;
+  GITHUB_TOKEN: string;
+  POLL_INTERVAL_MS: number;
+  WORKER_TICK_MS: number;
+  CLAUDE_CLI_PATH: string;
+  TASK_DB_PATH: string;
+  WORKTREES_ROOT: string;
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const result = ConfigSchema.safeParse(env);
+  const result = RawSchema.safeParse(env);
   if (!result.success) {
     const issues = result.error.issues
       .map((i) => `${i.path.join('.')}: ${i.message}`)
       .join('; ');
     throw new Error(`invalid config: ${issues}`);
   }
-  return result.data;
+  const raw = result.data;
+  return {
+    ...raw,
+    TASK_DB_PATH:
+      raw.TASK_DB_PATH ?? join(raw.FACTORY_REPO_ROOT, '.agent-factory', 'tasks.db'),
+    WORKTREES_ROOT: raw.WORKTREES_ROOT ?? join(raw.FACTORY_REPO_ROOT, '.worktrees')
+  };
 }

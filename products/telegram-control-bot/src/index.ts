@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { spawn } from 'node:child_process';
+import { mkdir } from 'node:fs/promises';
 import simpleGit from 'simple-git';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { loadConfig } from './config.ts';
@@ -8,6 +10,10 @@ import { makeNotifier, makeTextNotifier } from './notifier.ts';
 import { writeBriefAndCommit } from './gitWriter.ts';
 import { makeGitHubClient } from './githubClient.ts';
 import { createPrWatcher } from './prWatcher.ts';
+import { createTaskQueue } from './taskQueue.ts';
+import { createRunner } from './runner.ts';
+import { createWorktreeManager } from './worktreeManager.ts';
+import { createTaskWorker } from './taskWorker.ts';
 
 const proxyUrl = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
 if (proxyUrl) {
@@ -27,10 +33,24 @@ async function main(): Promise<void> {
     repoSlug: config.GITHUB_REPO_SLUG
   });
 
+  const taskQueue = createTaskQueue(config.TASK_DB_PATH);
+  const worktreeManager = createWorktreeManager(
+    { git, mkdir: async (p, opts) => void (await mkdir(p, opts)) },
+    config.WORKTREES_ROOT
+  );
+  const runner = createRunner({
+    worktreeManager,
+    spawn: (cmd, args, opts) => spawn(cmd, args, opts),
+    repoSlug: config.GITHUB_REPO_SLUG,
+    claudeCliPath: config.CLAUDE_CLI_PATH
+  });
+
   const bot = createBot({
     token: config.TELEGRAM_BOT_TOKEN,
     ownerChatId: config.TELEGRAM_OWNER_CHAT_ID,
     commitBrief,
+    enqueueTask: (desc, by) => taskQueue.enqueue(desc, by),
+    taskQueue,
     repoSlug: config.GITHUB_REPO_SLUG,
     githubClient
   });
@@ -44,10 +64,21 @@ async function main(): Promise<void> {
     intervalMs: config.POLL_INTERVAL_MS
   });
 
+  const taskWorker = createTaskWorker({
+    queue: taskQueue,
+    runner,
+    notify: (text) => notifyText(text),
+    logger: { log: (m) => console.log(m), error: (m, err) => console.error(m, err) },
+    tickIntervalMs: config.WORKER_TICK_MS,
+    worktreesRoot: config.WORKTREES_ROOT
+  });
+
   const shutdown = async (signal: string) => {
     console.log(`received ${signal}, shutting down`);
     prWatcher.stop();
+    await taskWorker.stop(30000);
     await Promise.allSettled([bot.stop(), server.close()]);
+    taskQueue.close();
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown('SIGINT'));
@@ -59,6 +90,8 @@ async function main(): Promise<void> {
   const address = await server.listen({ port: config.HTTP_PORT, host: '0.0.0.0' });
   console.log(`http listening on ${address}`);
   prWatcher.start().catch((err) => console.error('pr watcher start failed:', err));
+  taskWorker.start();
+  console.log(`task worker started (tick ${config.WORKER_TICK_MS}ms, db ${config.TASK_DB_PATH})`);
 }
 
 main().catch((err) => {
