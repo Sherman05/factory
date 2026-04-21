@@ -27,6 +27,7 @@ function fakeQueue(opts: { active?: Task[]; recent?: Task[] }): TaskQueue {
     enqueue: vi.fn(),
     claim: vi.fn(),
     update: vi.fn(),
+    getById: vi.fn(),
     getActive: vi.fn(() => opts.active ?? []),
     getRecent: vi.fn(() => opts.recent ?? []),
     close: vi.fn()

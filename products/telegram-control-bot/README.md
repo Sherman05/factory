@@ -10,6 +10,8 @@ The factory's Telegram Control Bot — owner-only commands and a
   and notifies on PR-ready / failure (see
   [brief F](../../docs/briefs/2026-04-18-brief-F-bot-runner-wiring.md)).
 - `/status` → shows active tasks plus the five most recent done/failed
+- `/cancel <id>` → cancels a queued task or kills the running `claude` CLI and
+  marks the task failed with reason "canceled by owner"
 - `POST /notify` → sends a formatted message to the owner
 
 ## Quick start

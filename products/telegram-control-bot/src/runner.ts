@@ -11,6 +11,7 @@ export type RunnerEvent =
 export interface Task {
   id: number;
   description: string;
+  abortSignal?: AbortSignal;
 }
 
 export interface ChildProcessLike {
@@ -18,6 +19,7 @@ export interface ChildProcessLike {
   stderr: { on(ev: 'data', cb: (chunk: unknown) => void): void };
   on(ev: 'exit', cb: (code: number | null) => void): unknown;
   on(ev: 'error', cb: (err: Error) => void): unknown;
+  kill(signal?: NodeJS.Signals | number): boolean;
 }
 
 export interface SpawnLike {
@@ -52,6 +54,12 @@ async function* runTaskGen(
 ): AsyncGenerator<RunnerEvent> {
   yield { type: 'state', state: 'starting' };
 
+  if (task.abortSignal?.aborted) {
+    yield { type: 'stderr', line: 'canceled before start' };
+    yield { type: 'state', state: 'failed' };
+    return;
+  }
+
   let worktree;
   try {
     worktree = await deps.worktreeManager.create(task.id);
@@ -69,6 +77,8 @@ async function* runTaskGen(
   });
 
   const child = deps.spawn(cliPath, ['-p', prompt], { cwd: worktree.path });
+  const abortListener = () => child.kill('SIGTERM');
+  task.abortSignal?.addEventListener('abort', abortListener, { once: true });
 
   const queue: RunnerEvent[] = [];
   let waiter: (() => void) | null = null;

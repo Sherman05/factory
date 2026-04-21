@@ -117,6 +117,19 @@ describe('createTaskQueue', () => {
     expect(recent[2]!.id).toBe(ids[2]);
   });
 
+  it('getById returns the task when it exists', () => {
+    const q = freshQueue();
+    const t = q.enqueue('foo', 7);
+    const fetched = q.getById(t.id);
+    expect(fetched?.id).toBe(t.id);
+    expect(fetched?.desc).toBe('foo');
+  });
+
+  it('getById returns null for an unknown id', () => {
+    const q = freshQueue();
+    expect(q.getById(404)).toBeNull();
+  });
+
   it('getRecent() defaults to 10', () => {
     const q = freshQueue();
     for (let i = 0; i < 15; i++) q.enqueue(`t${i}`, 1);
